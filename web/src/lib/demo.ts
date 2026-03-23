@@ -36,6 +36,16 @@ export type DemoCollection = {
   updatedAt: Date;
 };
 
+export type DemoPromptVersion = {
+  id: string;
+  promptId: string;
+  title: string;
+  content: string;
+  keys: string[];
+  isPrivate: boolean;
+  createdAt: Date;
+};
+
 type DemoFavourite = {
   id: string;
   userId: string;
@@ -60,6 +70,7 @@ type DemoCollectionPrompt = {
 type DemoState = {
   users: Map<string, DemoUser>;
   prompts: DemoPrompt[];
+  promptVersions: DemoPromptVersion[];
   collections: DemoCollection[];
   collectionPrompts: DemoCollectionPrompt[];
   favourites: DemoFavourite[];
@@ -242,7 +253,9 @@ function createInitialState(): DemoState {
     { id: "v_2", userId: demoUser.id, promptId: "s_spec", type: "UP", createdAt: t },
   ];
 
-  return { users, prompts, collections, collectionPrompts, favourites, votes };
+  const promptVersions: DemoPromptVersion[] = [];
+
+  return { users, prompts, promptVersions, collections, collectionPrompts, favourites, votes };
 }
 
 const globalForDemo = globalThis as unknown as { __promaDemoState?: DemoState };
@@ -383,6 +396,45 @@ export function demoUpdatePrompt(userId: string, promptId: string, data: Partial
   return next;
 }
 
+export function demoUpsertPromptVersion(userId: string, promptId: string, snapshot: Pick<DemoPrompt, "title" | "content" | "keys" | "isPrivate">) {
+  const p = demoGetPrompt(promptId);
+  if (!p || p.userId !== userId) return null;
+  const v: DemoPromptVersion = {
+    id: id("pv"),
+    promptId,
+    title: snapshot.title,
+    content: snapshot.content,
+    keys: snapshot.keys,
+    isPrivate: snapshot.isPrivate,
+    createdAt: now(),
+  };
+  state.promptVersions.unshift(v);
+  return v;
+}
+
+export function demoListPromptVersions(userId: string, promptId: string) {
+  const p = demoGetPrompt(promptId);
+  if (!p || p.userId !== userId) return [];
+  return state.promptVersions
+    .filter((v) => v.promptId === promptId)
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 50);
+}
+
+export function demoRevertPromptVersion(userId: string, promptId: string, versionId: string) {
+  const p = demoGetPrompt(promptId);
+  if (!p || p.userId !== userId) return null;
+  const v = state.promptVersions.find((x) => x.id === versionId && x.promptId === promptId);
+  if (!v) return null;
+  demoUpsertPromptVersion(userId, promptId, p);
+  return demoUpdatePrompt(userId, promptId, {
+    title: v.title,
+    content: v.content,
+    keys: v.keys,
+    isPrivate: v.isPrivate,
+  });
+}
+
 export function demoDeletePrompt(userId: string, promptId: string) {
   const p = demoGetPrompt(promptId);
   if (!p || p.userId !== userId) return false;
@@ -393,6 +445,7 @@ export function demoDeletePrompt(userId: string, promptId: string) {
   state.favourites = state.favourites.filter((f) => f.promptId !== promptId);
   state.votes = state.votes.filter((v) => v.promptId !== promptId);
   state.collectionPrompts = state.collectionPrompts.filter((cp) => cp.promptId !== promptId);
+  state.promptVersions = state.promptVersions.filter((v) => v.promptId !== promptId);
   return true;
 }
 

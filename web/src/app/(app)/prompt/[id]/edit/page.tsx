@@ -1,5 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
+import { PromptVersionHistory } from "@/components/PromptVersionHistory";
 import { auth } from "@/lib/auth";
 import { demoGetOrCreatePrompt, demoNoDb } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
@@ -37,6 +38,9 @@ export default async function EditPromptPage({
             isPrivate: prompt.isPrivate,
           }}
         />
+      </div>
+      <div className="mt-6">
+        <PromptVersionHistory promptId={prompt.id} />
       </div>
     </div>
   );

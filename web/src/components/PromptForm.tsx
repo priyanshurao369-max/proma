@@ -33,6 +33,9 @@ export function PromptForm({
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const shortcutCacheRef = useRef(new Map<string, string>());
   const expandTimerRef = useRef<number | null>(null);
+  const autosaveTimerRef = useRef<number | null>(null);
+  const autosaveReadyRef = useRef(false);
+  const lastSavedRef = useRef<string>("");
   const [content, setContent] = useState(initialValues?.content ?? "");
   const [keysText, setKeysText] = useState(joinTags(initialValues?.keys ?? []));
   const [isPrivate, setIsPrivate] = useState(initialValues?.isPrivate ?? false);
@@ -107,6 +110,10 @@ export function PromptForm({
         window.clearTimeout(expandTimerRef.current);
         expandTimerRef.current = null;
       }
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
     };
   }, []);
 
@@ -117,8 +124,51 @@ export function PromptForm({
     }, 300);
   }
 
+  useEffect(() => {
+    if (mode !== "edit" || !promptId) return;
+    if (!autosaveReadyRef.current) {
+      lastSavedRef.current = JSON.stringify({
+        content,
+        keys: splitTags(keysText),
+        isPrivate,
+      });
+      autosaveReadyRef.current = true;
+      return;
+    }
+
+    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = window.setTimeout(async () => {
+      const snapshot = JSON.stringify({
+        content,
+        keys: splitTags(keysText),
+        isPrivate,
+      });
+      if (snapshot === lastSavedRef.current) return;
+
+      try {
+        const res = await fetch(`/api/prompts/${promptId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json", "x-proma-skip-version": "1" },
+          body: snapshot,
+        });
+        if (!res.ok) return;
+        lastSavedRef.current = snapshot;
+      } catch {
+        return;
+      }
+    }, 700);
+
+    return () => {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+    };
+  }, [content, isPrivate, keysText, mode, promptId]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (busy) return;
     setError(null);
     setBusy(true);
     try {
@@ -141,8 +191,7 @@ export function PromptForm({
       }
 
       await res.json().catch(() => null);
-      router.push("/library");
-      router.refresh();
+      window.location.assign("/library");
     } finally {
       setBusy(false);
     }

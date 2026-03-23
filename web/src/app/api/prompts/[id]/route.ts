@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getSessionUserId } from "@/lib/auth-helpers";
-import { demoDeletePrompt, demoGetPrompt, demoGetUser, demoNoDb, demoUpdatePrompt } from "@/lib/demo";
+import { demoDeletePrompt, demoGetPrompt, demoGetUser, demoNoDb, demoUpdatePrompt, demoUpsertPromptVersion } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
 
 const updatePromptSchema = z.object({
@@ -54,11 +54,16 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
   const { id } = await ctx.params;
   const userId = await getSessionUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const skipVersion = req.headers.get("x-proma-skip-version") === "1";
 
   if (demoNoDb) {
     const body = await req.json().catch(() => null);
     const parsed = updatePromptSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    const current = demoGetPrompt(id);
+    if (!skipVersion && current && current.userId === userId) {
+      demoUpsertPromptVersion(userId, id, current);
+    }
     const prompt = demoUpdatePrompt(userId, id, {
       title: parsed.data.title,
       content: parsed.data.content,
@@ -91,10 +96,29 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     data.keywords = parsed.data.keywords.map((k) => k.trim()).filter(Boolean);
   }
 
-  const prompt = await prisma.prompt.update({
-    where: { id },
-    data,
+  const prompt = await prisma.$transaction(async (tx) => {
+    const current = await tx.prompt.findUnique({
+      where: { id },
+      select: { id: true, title: true, content: true, keys: true, isPrivate: true },
+    });
+    if (!current) return null;
+    if (!skipVersion) {
+      await (tx as unknown as { promptVersion: { create: (args: unknown) => Promise<unknown> } }).promptVersion.create({
+        data: {
+          promptId: current.id,
+          title: current.title,
+          content: current.content,
+          keys: current.keys,
+          isPrivate: current.isPrivate,
+        },
+      });
+    }
+    return tx.prompt.update({
+      where: { id },
+      data,
+    });
   });
+  if (!prompt) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json({ prompt });
 }

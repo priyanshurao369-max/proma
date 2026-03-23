@@ -81,9 +81,24 @@ model Prompt {
   votes        Vote[]
   inCollections CollectionPrompt[]
   favouritedBy Favourite[]
+  versions     PromptVersion[]
 
   @@index([userId])
   @@index([isPrivate])
+}
+
+model PromptVersion {
+  id        String   @id @default(cuid())
+  promptId  String
+  title     String
+  content   String   @db.Text
+  keys      String[]
+  isPrivate Boolean
+  createdAt DateTime @default(now())
+
+  prompt Prompt @relation(fields: [promptId], references: [id], onDelete: Cascade)
+
+  @@index([promptId, createdAt])
 }
 
 enum VoteType {
