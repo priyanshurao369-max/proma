@@ -103,7 +103,7 @@ export async function PATCH(req: Request, ctx: { params: Promise<{ id: string }>
     });
     if (!current) return null;
     if (!skipVersion) {
-      await (tx as unknown as { promptVersion: { create: (args: unknown) => Promise<unknown> } }).promptVersion.create({
+      await tx.promptVersion.create({
         data: {
           promptId: current.id,
           title: current.title,

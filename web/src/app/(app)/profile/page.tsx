@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 
 import { ProfileForm } from "@/components/ProfileForm";
+import { SyncTokenCard } from "@/components/SyncTokenCard";
 import { auth } from "@/lib/auth";
 import { demoGetUser, demoListOwnPrompts, demoNoDb } from "@/lib/demo";
 import { prisma } from "@/lib/prisma";
@@ -80,6 +81,8 @@ export default async function ProfilePage() {
           initialName={user.name ?? ""}
           initialBio={user.bio ?? ""}
         />
+
+        <SyncTokenCard />
       </div>
     </div>
   );

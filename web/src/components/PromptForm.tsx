@@ -31,7 +31,7 @@ export function PromptForm({
 }) {
   const router = useRouter();
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
-  const shortcutCacheRef = useRef(new Map<string, string>());
+  const shortcutCacheRef = useRef(new Map<string, string | null>());
   const expandTimerRef = useRef<number | null>(null);
   const autosaveTimerRef = useRef<number | null>(null);
   const autosaveReadyRef = useRef(false);
@@ -42,22 +42,33 @@ export function PromptForm({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function resolveShortcut(key: string) {
+  function getCached(normalizedKey: string): string | null | undefined {
+    return shortcutCacheRef.current.get(normalizedKey.toLowerCase());
+  }
+
+  async function resolveShortcut(key: string): Promise<string | null> {
     const normalized = key.startsWith("/") ? key : `/${key}`;
-    const cached = shortcutCacheRef.current.get(normalized.toLowerCase());
+    const lk = normalized.toLowerCase();
+
+    const cached = getCached(normalized);
     if (cached !== undefined) return cached;
 
     const url = new URL("/api/prompts/by-key", window.location.origin);
     url.searchParams.set("key", normalized);
-    const res = await fetch(url.toString());
-    if (!res.ok) {
-      shortcutCacheRef.current.set(normalized.toLowerCase(), "");
-      return "";
+
+    try {
+      const res = await fetch(url.toString());
+      if (!res.ok) {
+        shortcutCacheRef.current.set(lk, null);
+        return null;
+      }
+      const json = (await res.json()) as { prompt?: { content?: string } };
+      const text = (json.prompt?.content ?? "").toString();
+      shortcutCacheRef.current.set(lk, text);
+      return text;
+    } catch {
+      return null;
     }
-    const json = (await res.json()) as { prompt?: { content?: string } };
-    const text = (json.prompt?.content ?? "").toString();
-    shortcutCacheRef.current.set(normalized.toLowerCase(), text);
-    return text;
   }
 
   function findTrailingShortcutToken(textBeforeCaret: string) {
@@ -65,42 +76,54 @@ export function PromptForm({
     return match?.[1] ?? null;
   }
 
-  async function expandShortcut(trigger: "space" | "enter" | "tab" | "idle") {
+  async function expandShortcut(
+    trigger: "space" | "enter" | "tab" | "idle",
+    snapshot?: { value: string; caret: number; token: string; start: number },
+  ) {
     const el = contentRef.current;
     if (!el) return;
-    const caret = el.selectionStart ?? 0;
-    const before = el.value.slice(0, caret);
-    const token = findTrailingShortcutToken(before);
-    if (!token) return;
 
-    const start = caret - token.length;
-    const end = caret;
+    let value: string;
+    let caret: number;
+    let token: string;
+    let start: number;
+
+    if (snapshot) {
+      ({ value, caret, token, start } = snapshot);
+      if (el.value !== value) return;
+    } else {
+      value = el.value;
+      caret = el.selectionStart ?? 0;
+      const before = value.slice(0, caret);
+      const found = findTrailingShortcutToken(before);
+      if (!found) return;
+      token = found;
+      start = caret - token.length;
+    }
+
+    const after = value.slice(caret);
     const replacement = await resolveShortcut(token);
 
-    const after = el.value.slice(end);
+    if (replacement === null && trigger === "idle") return;
+
+    const base = replacement === null ? token : replacement;
     const insert =
       trigger === "space"
-        ? replacement
-          ? `${replacement} `
-          : `${token} `
+        ? `${base} `
         : trigger === "enter"
-          ? replacement
-            ? `${replacement}\n`
-            : `${token}\n`
+          ? `${base}\n`
           : trigger === "tab"
-            ? replacement
-              ? `${replacement} `
-              : `${token} `
-            : replacement
-              ? replacement
-              : token;
-    const nextValue = `${el.value.slice(0, start)}${insert}${after}`;
+            ? `${base} `
+            : base;
+
+    const nextValue = `${value.slice(0, start)}${insert}${after}`;
     setContent(nextValue);
 
     requestAnimationFrame(() => {
+      if (!contentRef.current) return;
       const nextCaret = start + insert.length;
-      el.focus();
-      el.setSelectionRange(nextCaret, nextCaret);
+      contentRef.current.focus();
+      contentRef.current.setSelectionRange(nextCaret, nextCaret);
     });
   }
 
@@ -126,6 +149,7 @@ export function PromptForm({
 
   useEffect(() => {
     if (mode !== "edit" || !promptId) return;
+    if (busy) return;
     if (!autosaveReadyRef.current) {
       lastSavedRef.current = JSON.stringify({
         content,
@@ -164,7 +188,7 @@ export function PromptForm({
         autosaveTimerRef.current = null;
       }
     };
-  }, [content, isPrivate, keysText, mode, promptId]);
+  }, [busy, content, isPrivate, keysText, mode, promptId]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -172,6 +196,11 @@ export function PromptForm({
     setError(null);
     setBusy(true);
     try {
+      if (autosaveTimerRef.current) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+
       const payload: PromptFormValues = {
         content,
         keys: splitTags(keysText),
@@ -191,7 +220,7 @@ export function PromptForm({
       }
 
       await res.json().catch(() => null);
-      window.location.assign("/library");
+      router.replace("/library");
     } finally {
       setBusy(false);
     }
@@ -207,6 +236,7 @@ export function PromptForm({
           <input
             value={keysText}
             onChange={(e) => setKeysText(e.target.value)}
+            data-disable-shortcuts="true"
             placeholder="Shortcut (/fix, /summarize)"
             className="h-10 rounded-md border border-black/10 bg-white px-3 dark:border-white/10 dark:bg-zinc-950"
           />
@@ -220,29 +250,29 @@ export function PromptForm({
               setContent(e.target.value);
               scheduleIdleExpand();
             }}
+            data-disable-shortcuts="true"
             onKeyDown={(e) => {
               const el = contentRef.current;
               if (!el) return;
 
+              const value = el.value;
               const caret = el.selectionStart ?? 0;
-              const before = el.value.slice(0, caret);
+              const before = value.slice(0, caret);
               const token = findTrailingShortcutToken(before);
               if (!token) return;
+              const start = caret - token.length;
 
-              if (e.key === " " && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                void expandShortcut("space");
-                return;
-              }
-              if (e.key === "Enter" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                void expandShortcut("enter");
-                return;
-              }
-              if (e.key === "Tab" && !e.shiftKey && !e.altKey && !e.ctrlKey && !e.metaKey) {
-                e.preventDefault();
-                void expandShortcut("tab");
-              }
+              const isTriggered =
+                (e.key === " " || e.key === "Enter" || e.key === "Tab") &&
+                !e.shiftKey &&
+                !e.altKey &&
+                !e.ctrlKey &&
+                !e.metaKey;
+              if (!isTriggered) return;
+
+              e.preventDefault();
+              const trigger = e.key === " " ? "space" : e.key === "Enter" ? "enter" : "tab";
+              void expandShortcut(trigger, { value, caret, token, start });
             }}
             required
             rows={10}

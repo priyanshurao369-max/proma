@@ -21,7 +21,7 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
   if (!prompt) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (prompt.userId !== userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const versions = await (prisma as unknown as { promptVersion: { findMany: (args: unknown) => Promise<unknown> } }).promptVersion.findMany({
+  const versions = await prisma.promptVersion.findMany({
     where: { promptId },
     orderBy: [{ createdAt: "desc" }],
     take: 50,

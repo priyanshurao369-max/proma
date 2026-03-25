@@ -350,6 +350,15 @@ export function demoFindPromptByKey(userId: string, key: string) {
   );
 }
 
+export function demoFindPublicPromptByKey(key: string) {
+  const normalized = key.startsWith("/") ? key : `/${key}`;
+  return (
+    state.prompts.find(
+      (p) => !p.isPrivate && p.keys.some((k) => k.toLowerCase() === normalized.toLowerCase()),
+    ) ?? null
+  );
+}
+
 export function demoGetOrCreatePrompt(userId: string, promptId: string) {
   const existing = demoGetPrompt(promptId);
   if (existing) return existing.userId === userId ? existing : null;

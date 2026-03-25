@@ -22,14 +22,14 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string; v
   if (!prompt) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (prompt.userId !== userId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const version = await (prisma as unknown as { promptVersion: { findFirst: (args: unknown) => Promise<unknown> } }).promptVersion.findFirst({
+  const version = await prisma.promptVersion.findFirst({
     where: { id: versionId, promptId },
     select: { id: true, title: true, content: true, keys: true, isPrivate: true },
   });
   if (!version) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const updated = await prisma.$transaction(async (tx) => {
-    await (tx as unknown as { promptVersion: { create: (args: unknown) => Promise<unknown> } }).promptVersion.create({
+    await tx.promptVersion.create({
       data: {
         promptId: prompt.id,
         title: prompt.title,
@@ -42,10 +42,10 @@ export async function POST(_req: Request, ctx: { params: Promise<{ id: string; v
     return tx.prompt.update({
       where: { id: promptId },
       data: {
-        title: (version as { title: string }).title,
-        content: (version as { content: string }).content,
-        keys: (version as { keys: string[] }).keys,
-        isPrivate: (version as { isPrivate: boolean }).isPrivate,
+        title: version.title,
+        content: version.content,
+        keys: version.keys,
+        isPrivate: version.isPrivate,
       },
     });
   });
