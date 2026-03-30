@@ -1,0 +1,96 @@
+cargo :     Checking 
+proma-daemon v0.1.0 (C:
+\Users\rites\Documents\
+trae_projects\proma\src
+-tauri)
+At line:1 char:1
++ cargo check 2>&1 | 
+Out-File -FilePath 
+errors.txt -Encoding 
+ASCII
++ ~~~~~~~~~~~~~~~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (    Checking    
+ pr...roma\src-taur    
+i):String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+error[E0599]: 
+`ListenError` doesn't 
+implement 
+`std::fmt::Display`
+  --> 
+src\watcher.rs:69:21
+   |
+69 |   res.map_err(|e| 
+e.to_string())
+   |                   
+  ^^^^^^^^^ method 
+cannot be called on 
+`ListenError` due to 
+unsatisfied trait 
+bounds
+   |
+  ::: C:\Users\rites\.c
+argo\registry\src\index
+.crates.io-1949cf8c6b5b
+557f\rdev-0.5.3\src\rde
+v.rs:17:1
+   |
+17 | pub enum 
+ListenError {
+   | 
+-------------------- 
+doesn't satisfy 
+`ListenError: 
+ToString` or 
+`ListenError: 
+std::fmt::Display`
+   |
+   = note: the 
+following trait bounds 
+were not satisfied:
+           
+`ListenError: 
+std::fmt::Display`
+           which is 
+required by 
+`ListenError: ToString`
+
+error[E0596]: cannot 
+borrow `conn` as 
+mutable, as it is not 
+declared as mutable
+  --> 
+src\cache.rs:25:12
+   |
+25 |   let tx = 
+conn.transaction()?;
+   |            ^^^^ 
+cannot borrow as 
+mutable
+   |
+help: consider 
+changing this to be 
+mutable
+   |
+24 |   let mut conn = C
+onnection::open(path)?;
+   |       +++
+
+Some errors have 
+detailed explanations: 
+E0596, E0599.
+For more information 
+about an error, try 
+`rustc --explain 
+E0596`.
+error: could not 
+compile `proma-daemon` 
+(bin "proma-daemon") 
+due to 2 previous 
+errors

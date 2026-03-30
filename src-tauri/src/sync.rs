@@ -79,6 +79,7 @@ pub fn sync_once(token: &str, db_path: &Path) -> Result<(), String> {
           id: p.id,
           title: p.title,
           content: p.content,
+          is_private: p.is_private,
         },
         keys,
       )

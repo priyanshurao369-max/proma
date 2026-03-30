@@ -20,4 +20,5 @@ pub struct PromptEntry {
   pub id: String,
   pub title: String,
   pub content: String,
+  pub is_private: bool,
 }

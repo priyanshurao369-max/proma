@@ -66,7 +66,7 @@ pub fn start_watcher(state: Arc<Mutex<WatcherState>>) -> Result<(), String> {
   let res = listen(move |event: Event| {
     on_event(&state, event);
   });
-  res.map_err(|e| e.to_string())
+  res.map_err(|e| format!("{:?}", e))
 }
 
 fn on_event(state: &Arc<Mutex<WatcherState>>, event: Event) {

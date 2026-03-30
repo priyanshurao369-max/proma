@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { DeletePromptButton } from "@/components/DeletePromptButton";
 import { FavouriteToggle } from "@/components/FavouriteToggle";
 import { auth } from "@/lib/auth";
 import { demoFindPromptByKey, demoListFavourites, demoListOwnPrompts, demoNoDb } from "@/lib/demo";
@@ -132,6 +133,7 @@ export default async function LibraryAllPage({
                   >
                     Edit
                   </Link>
+                  <DeletePromptButton promptId={p.id} />
                 </div>
               </div>
               {p.keys.length ? (

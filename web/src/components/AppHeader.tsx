@@ -50,6 +50,12 @@ export function AppHeader() {
                 New Prompt
               </Link>
               <Link
+                href="/connect"
+                className="text-foreground/80 hover:text-foreground"
+              >
+                Connect
+              </Link>
+              <Link
                 href="/profile"
                 className="text-foreground/80 hover:text-foreground"
               >
