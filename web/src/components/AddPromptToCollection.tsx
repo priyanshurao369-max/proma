@@ -2,15 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { tauriGetPrompts, tauriAddPromptToCollection, DecodedPrompt } from "@/lib/tauri-bridge";
 
-type PromptListItem = {
-  id: string;
-  title: string;
-  content: string;
-  keys: string[];
-  isPrivate: boolean;
-  useCount: number;
-};
+// Using DecodedPrompt from tauri-bridge
 
 function useDebouncedValue<T>(value: T, delayMs: number) {
   const [debounced, setDebounced] = useState(value);
@@ -26,14 +20,16 @@ function useDebouncedValue<T>(value: T, delayMs: number) {
 export function AddPromptToCollection({
   collectionId,
   existingPromptIds,
+  onSuccess,
 }: {
   collectionId: string;
   existingPromptIds: string[];
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const debouncedQuery = useDebouncedValue(query, 250);
-  const [results, setResults] = useState<PromptListItem[]>([]);
+  const [results, setResults] = useState<DecodedPrompt[]>([]);
   const [busy, setBusy] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -56,20 +52,19 @@ export function AddPromptToCollection({
       setError(null);
       setBusy(true);
       try {
-        const url = new URL("/api/prompts", window.location.origin);
-        url.searchParams.set("sort", "recent");
-        url.searchParams.set("search", debouncedQuery.trim());
-        const res = await fetch(url.toString());
-        if (!res.ok) {
-          setResults([]);
-          return;
-        }
-        const json = (await res.json()) as { prompts: PromptListItem[] };
+        const all = await tauriGetPrompts();
         if (cancelled) return;
-        const filtered = (json.prompts ?? []).filter((p) => !existing.has(p.id));
+        const q = debouncedQuery.toLowerCase();
+        const filtered = all.filter(p => 
+          !existing.has(p.id) && 
+          (p.title.toLowerCase().includes(q) || p.content.toLowerCase().includes(q))
+        );
         setResults(filtered.slice(0, 10));
-      } catch {
-        if (!cancelled) setResults([]);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err instanceof Error ? err.message : "Search failed");
+          setResults([]);
+        }
       } finally {
         if (!cancelled) setBusy(false);
       }
@@ -87,17 +82,12 @@ export function AddPromptToCollection({
     setError(null);
     setAddingId(promptId);
     try {
-      const res = await fetch(`/api/collections/${collectionId}/prompts`, {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ promptId }),
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(json?.error ?? "Failed to add prompt");
-        return;
-      }
+      await tauriAddPromptToCollection(promptId, collectionId);
+      if (onSuccess) onSuccess();
       router.refresh();
+      // Optionally trigger a callback to update existingPromptIds in parent
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add prompt");
     } finally {
       setAddingId(null);
     }

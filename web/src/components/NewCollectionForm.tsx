@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { tauriCreateCollection } from "@/lib/tauri-bridge";
 
 export function NewCollectionForm() {
   const router = useRouter();
@@ -15,20 +16,18 @@ export function NewCollectionForm() {
     setError(null);
     setBusy(true);
     try {
-      const res = await fetch("/api/collections", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, description: description || undefined }),
+      await tauriCreateCollection({
+        id: crypto.randomUUID(),
+        name,
+        description: description || undefined,
       });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(json?.error ?? "Create failed");
-        return;
-      }
       setName("");
       setDescription("");
       setOpen(false);
       router.refresh();
+      // If there's a callback to refresh the parent list, it should be called here
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Create failed");
     } finally {
       setBusy(false);
     }

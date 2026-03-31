@@ -3,7 +3,15 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
-export function DeletePromptButton({ promptId }: { promptId: string }) {
+import { tauriDeletePrompt } from "@/lib/tauri-bridge";
+
+export function DeletePromptButton({ 
+  promptId, 
+  onSuccess 
+}: { 
+  promptId: string; 
+  onSuccess?: () => void;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -17,14 +25,18 @@ export function DeletePromptButton({ promptId }: { promptId: string }) {
 
     setBusy(true);
     try {
-      const res = await fetch(`/api/prompts/${promptId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) {
+      // res = await fetch(`/api/prompts/${promptId}`, { method: "DELETE" });
+      await tauriDeletePrompt(promptId);
+      if (onSuccess) {
+        onSuccess();
+      } else {
         router.refresh();
       }
+    } catch (err) {
+      console.error("Failed to delete:", err);
     } finally {
       setBusy(false);
+      setConfirm(false);
     }
   }
 

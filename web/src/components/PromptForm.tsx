@@ -20,6 +20,8 @@ function splitTags(text: string) {
     .filter(Boolean);
 }
 
+import { tauriCreatePrompt, tauriGetPrompts, tauriUpdatePrompt, DecodedPrompt } from "@/lib/tauri-bridge";
+
 export function PromptForm({
   mode,
   promptId,
@@ -31,44 +33,28 @@ export function PromptForm({
 }) {
   const router = useRouter();
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
-  const shortcutCacheRef = useRef(new Map<string, string | null>());
+  const promptCacheRef = useRef<DecodedPrompt[]>([]);
   const expandTimerRef = useRef<number | null>(null);
-  const autosaveTimerRef = useRef<number | null>(null);
-  const autosaveReadyRef = useRef(false);
-  const lastSavedRef = useRef<string>("");
+  
   const [content, setContent] = useState(initialValues?.content ?? "");
   const [keysText, setKeysText] = useState(joinTags(initialValues?.keys ?? []));
   const [isPrivate, setIsPrivate] = useState(initialValues?.isPrivate ?? false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  function getCached(normalizedKey: string): string | null | undefined {
-    return shortcutCacheRef.current.get(normalizedKey.toLowerCase());
-  }
+  // Load cache for in-form expansion
+  useEffect(() => {
+    tauriGetPrompts().then(data => {
+      promptCacheRef.current = data;
+    });
+  }, []);
 
   async function resolveShortcut(key: string): Promise<string | null> {
-    const normalized = key.startsWith("/") ? key : `/${key}`;
-    const lk = normalized.toLowerCase();
-
-    const cached = getCached(normalized);
-    if (cached !== undefined) return cached;
-
-    const url = new URL("/api/prompts/by-key", window.location.origin);
-    url.searchParams.set("key", normalized);
-
-    try {
-      const res = await fetch(url.toString());
-      if (!res.ok) {
-        shortcutCacheRef.current.set(lk, null);
-        return null;
-      }
-      const json = (await res.json()) as { prompt?: { content?: string } };
-      const text = (json.prompt?.content ?? "").toString();
-      shortcutCacheRef.current.set(lk, text);
-      return text;
-    } catch {
-      return null;
-    }
+    const normalized = key.startsWith("/") ? key.toLowerCase() : `/${key.toLowerCase()}`;
+    const found = promptCacheRef.current.find(p => 
+      p.keys.some(k => k.toLowerCase() === normalized)
+    );
+    return found?.content ?? null;
   }
 
   function findTrailingShortcutToken(textBeforeCaret: string) {
@@ -133,10 +119,6 @@ export function PromptForm({
         window.clearTimeout(expandTimerRef.current);
         expandTimerRef.current = null;
       }
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
     };
   }, []);
 
@@ -147,80 +129,29 @@ export function PromptForm({
     }, 300);
   }
 
-  useEffect(() => {
-    if (mode !== "edit" || !promptId) return;
-    if (busy) return;
-    if (!autosaveReadyRef.current) {
-      lastSavedRef.current = JSON.stringify({
-        content,
-        keys: splitTags(keysText),
-        isPrivate,
-      });
-      autosaveReadyRef.current = true;
-      return;
-    }
-
-    if (autosaveTimerRef.current) window.clearTimeout(autosaveTimerRef.current);
-    autosaveTimerRef.current = window.setTimeout(async () => {
-      const snapshot = JSON.stringify({
-        content,
-        keys: splitTags(keysText),
-        isPrivate,
-      });
-      if (snapshot === lastSavedRef.current) return;
-
-      try {
-        const res = await fetch(`/api/prompts/${promptId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json", "x-proma-skip-version": "1" },
-          body: snapshot,
-        });
-        if (!res.ok) return;
-        lastSavedRef.current = snapshot;
-      } catch {
-        return;
-      }
-    }, 700);
-
-    return () => {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-    };
-  }, [busy, content, isPrivate, keysText, mode, promptId]);
-
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
     setError(null);
     setBusy(true);
     try {
-      if (autosaveTimerRef.current) {
-        window.clearTimeout(autosaveTimerRef.current);
-        autosaveTimerRef.current = null;
-      }
-
-      const payload: PromptFormValues = {
+      const keys = splitTags(keysText);
+      const promptData: DecodedPrompt = {
+        id: promptId || crypto.randomUUID(),
+        title: content.split("\n")[0].slice(0, 50) || "Untitled",
         content,
-        keys: splitTags(keysText),
-        isPrivate,
+        keys,
       };
 
-      const res = await fetch(mode === "create" ? "/api/prompts" : `/api/prompts/${promptId}`, {
-        method: mode === "create" ? "POST" : "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const json = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(json?.error ?? "Save failed");
-        return;
+      if (mode === "create") {
+        await tauriCreatePrompt(promptData);
+      } else {
+        await tauriUpdatePrompt(promptData);
       }
 
-      await res.json().catch(() => null);
       router.replace("/library");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setBusy(false);
     }

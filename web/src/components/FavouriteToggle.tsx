@@ -1,32 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { tauriIsFavourite, tauriToggleFavourite } from "@/lib/tauri-bridge";
 
 export function FavouriteToggle({
   promptId,
   initial,
+  onSuccess,
 }: {
   promptId: string;
   initial: boolean;
+  onSuccess?: () => void;
 }) {
   const [isFav, setIsFav] = useState(initial);
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    tauriIsFavourite(promptId).then(setIsFav).catch(console.error);
+  }, [promptId]);
 
   async function toggle() {
     if (busy) return;
     setBusy(true);
     try {
-      if (isFav) {
-        const res = await fetch(`/api/favourites/${promptId}`, { method: "DELETE" });
-        if (res.ok) setIsFav(false);
-      } else {
-        const res = await fetch("/api/favourites", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ promptId }),
-        });
-        if (res.ok) setIsFav(true);
-      }
+      const next = await tauriToggleFavourite(promptId);
+      setIsFav(next);
+      if (onSuccess) onSuccess();
+    } catch (err) {
+      console.error(err);
     } finally {
       setBusy(false);
     }

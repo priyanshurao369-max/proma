@@ -1,28 +1,27 @@
-import { notFound, redirect } from "next/navigation";
+"use client";
 
-import { PromptVersionHistory } from "@/components/PromptVersionHistory";
-import { auth } from "@/lib/auth";
-import { demoGetOrCreatePrompt, demoNoDb } from "@/lib/demo";
-import { prisma } from "@/lib/prisma";
+import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import { PromptForm } from "@/components/PromptForm";
+import { tauriGetPrompts, DecodedPrompt } from "@/lib/tauri-bridge";
 
-export const dynamic = "force-dynamic";
+export default function EditPromptPage() {
+  const params = useParams();
+  const id = params?.id as string;
+  const [prompt, setPrompt] = useState<DecodedPrompt | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export default async function EditPromptPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const session = await auth();
-  if (!session) redirect("/login");
+  useEffect(() => {
+    if (!id) return;
+    tauriGetPrompts().then(data => {
+      const found = data.find(p => p.id === id);
+      setPrompt(found || null);
+      setLoading(false);
+    });
+  }, [id]);
 
-  const { id } = await params;
-  const prompt = demoNoDb
-    ? demoGetOrCreatePrompt(session.user.id, id)
-    : await prisma.prompt.findFirst({
-        where: { id, userId: session.user.id },
-      });
-  if (!prompt) notFound();
+  if (loading) return <div className="p-8 text-sm text-foreground/50">Loading...</div>;
+  if (!prompt) return <div className="p-8 text-sm text-red-500">Prompt not found</div>;
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10">
@@ -35,12 +34,8 @@ export default async function EditPromptPage({
           initialValues={{
             content: prompt.content,
             keys: prompt.keys,
-            isPrivate: prompt.isPrivate,
           }}
         />
-      </div>
-      <div className="mt-6">
-        <PromptVersionHistory promptId={prompt.id} />
       </div>
     </div>
   );

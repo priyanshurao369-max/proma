@@ -22,12 +22,6 @@ export default function Home() {
           >
             Browse Store
           </Link>
-          <Link
-            href="/login"
-            className="inline-flex items-center justify-center rounded-md border border-black/10 bg-white px-4 py-2 text-sm font-medium text-black hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white dark:hover:bg-zinc-900"
-          >
-            Login
-          </Link>
         </div>
       </section>
 

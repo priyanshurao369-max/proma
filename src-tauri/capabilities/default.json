@@ -1,0 +1,32 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "enables the default permissions",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "shell:allow-open",
+    "sql:allow-execute",
+    "sql:allow-select",
+    "sql:allow-load",
+    "sql:allow-query",
+    "allow-refresh-prompts",
+    "allow-get-prompts",
+    "allow-create-prompt",
+    "allow-update-prompt",
+    "allow-delete-prompt",
+    "allow-get-collections",
+    "allow-create-collection",
+    "allow-delete-collection",
+    "allow-get-prompt-collections",
+    "allow-add-prompt-to-collection",
+    "allow-remove-prompt-from-collection",
+    "allow-get-collection-detail",
+    "allow-toggle-favourite",
+    "allow-get-favourites",
+    "allow-is-favourite",
+    "allow-is-daemon-alive"
+  ]
+}

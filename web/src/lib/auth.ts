@@ -148,9 +148,6 @@ async function seedDemoData(userId: string) {
 export const authOptions: NextAuthOptions = {
   ...(demoNoDb ? {} : { adapter: PrismaAdapter(prisma) }),
   debug: process.env.NODE_ENV === "development",
-  pages: {
-    signIn: "/login",
-  },
   ...(demoNoDb ? { session: { strategy: "jwt" } } : {}),
   providers: [
     CredentialsProvider({

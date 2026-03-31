@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { tauriRemovePromptFromCollection } from "@/lib/tauri-bridge";
 
 export function RemoveFromCollectionButton({
   collectionId,
   promptId,
+  onSuccess,
 }: {
   collectionId: string;
   promptId: string;
+  onSuccess?: () => void;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -17,10 +20,11 @@ export function RemoveFromCollectionButton({
     if (busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`/api/collections/${collectionId}/prompts/${promptId}`, {
-        method: "DELETE",
-      });
-      if (res.ok) router.refresh();
+      await tauriRemovePromptFromCollection(promptId, collectionId);
+      if (onSuccess) onSuccess();
+      router.refresh();
+    } catch (err) {
+      console.error(err);
     } finally {
       setBusy(false);
     }
